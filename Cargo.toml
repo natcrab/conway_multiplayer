@@ -1,0 +1,10 @@
+[package]
+name = "conway"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "helper"
+path = "src/lib.rs"
+[dependencies]
+regex = "1.11.1"

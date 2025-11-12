@@ -1,11 +1,8 @@
 use regex::Regex;
+use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::Display;
-use std::sync::{
-    atomic::{AtomicI32, Ordering::Relaxed},
-    //mpsc,
-    //mpsc::{Receiver, Sender},
-};
+use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::{fmt, process};
@@ -52,6 +49,14 @@ pub struct Coordinates {
 }
 
 impl Conway {
+    fn track_duplicates(&self, set: &mut HashSet<Vec<bool>>) -> bool {
+        if set.contains(&self.board) {
+            return true;
+        }
+        set.insert(self.board.clone());
+        false
+    }
+
     fn new(c: Coordinates) -> Self {
         //let vec: Vec<bool> = Vec::with_capacity((c.row * c.col) as usize); //This does
         //not set the length
@@ -120,33 +125,39 @@ impl Conway {
             .expect("No error should be here either"))
     }
 
-    fn next_state(&mut self) {
+    fn next_state(&mut self) -> i32 {
         let row = self.row;
         let col = self.col;
         let max = row * col;
         let reader = Arc::new(self.board.clone());
         let arc = Arc::new(Mutex::new(self));
         let curr_cell = &AtomicI32::new(0);
+        let changed = &AtomicI32::new(0);
         thread::scope(|s| {
             for _ in 0..NUM_THREADS {
                 let arc = arc.clone();
                 let reader = reader.clone();
-                s.spawn(move || loop {
-                    let cell = curr_cell.fetch_add(1, Relaxed);
-                    if cell >= max {
-                        break;
-                    }
-                    let num = Conway::find_neighbours(cell, &reader, row, col);
-                    if !(2..=3).contains(&num) && reader[cell as usize] {
-                        let mut guard = arc.lock().unwrap();
-                        guard.board[cell as usize] = false; //autoderef
-                    } else if num == 3 && !reader[cell as usize] {
-                        let mut guard = arc.lock().unwrap();
-                        guard.board[cell as usize] = true;
+                s.spawn(move || {
+                    loop {
+                        let cell = curr_cell.fetch_add(1, Relaxed);
+                        if cell >= max {
+                            break;
+                        }
+                        let num = Conway::find_neighbours(cell, &reader, row, col);
+                        if !(2..=3).contains(&num) && reader[cell as usize] {
+                            let mut guard = arc.lock().unwrap();
+                            guard.board[cell as usize] = false; //autoderef
+                            changed.fetch_sub(1, Relaxed);
+                        } else if num == 3 && !reader[cell as usize] {
+                            let mut guard = arc.lock().unwrap();
+                            guard.board[cell as usize] = true;
+                            changed.fetch_add(1, Relaxed);
+                        }
                     }
                 });
             }
         });
+        std::cmp::max(0, changed.load(Relaxed))
     }
 
     fn print_board(&self) {
@@ -179,10 +190,15 @@ impl Conway {
         counter
     }
 }
+
 fn main() {
-    let mut board = Conway::new(Conway::parse_pair("6", "4"));
+    let mut board = Conway::new(Conway::parse_pair("600", "400"));
     board.make_alive(board.parse("0 0 0 1 1 2 1 3 2 0 2 1".to_string()).unwrap());
+    let mut set: HashSet<Vec<bool>> = HashSet::new();
     for _ in 0..10 {
+        if board.track_duplicates(&mut set) {
+            break;
+        }
         board.next_state();
         board.print_board();
     }

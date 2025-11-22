@@ -1,9 +1,7 @@
 use regex::Regex;
-use slint::{Model, ModelRc, VecModel, slint};
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::Display;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -209,11 +207,7 @@ fn main() {
     let main_window = MainWindow::new().unwrap();
     let mut board = Conway::new(Conway::parse_pair("10", "10"));
     board.make_alive(board.parse("0 0 0 1 1 2 1 3 2 0 2 1".to_string()).unwrap());
-    let tiles: Vec<Tile> = Vec::new();
-    for i in board.board {
-        tiles.push(Tile::new(i));
-    }
-    let model: Rc<VecModel<Tile>> = Rc::new(VecModel::from());
+    main_window.get_boxes.push();
     let mut set: HashSet<Vec<bool>> = HashSet::new();
     for _ in 0..10 {
         if board.track_duplicates(&mut set) {
